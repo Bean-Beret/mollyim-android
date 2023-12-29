@@ -156,6 +156,20 @@ class IncomingMessageObserver(private val context: Application) {
     }
   }
 
+  private fun mayDisconnectUnidentified() {
+    val timeIdle: Long
+    val appVisibleSnapshot: Boolean
+
+    lock.withLock {
+      appVisibleSnapshot = appVisible
+      timeIdle = if (appVisibleSnapshot) 0 else System.currentTimeMillis() - lastInteractionTime
+    }
+    if (timeIdle > websocketReadTimeout) {
+      Log.d(TAG, "Disconnecting unidentified websocket")
+      ApplicationDependencies.getSignalWebSocket().disconnectUnidentified()
+    }
+  }
+
   private fun isConnectionNecessary(): Boolean {
     if (KeyCachingService.isLocked()) {
       Log.i(TAG, "Don't connect anymore. App is locked.")
@@ -392,6 +406,7 @@ class IncomingMessageObserver(private val context: Application) {
           while (isConnectionNecessary()) {
             try {
               Log.d(TAG, "Reading message...")
+              mayDisconnectUnidentified()
 
               val hasMore = signalWebSocket.readMessageBatch(websocketReadTimeout, 30) { batch ->
                 Log.i(TAG, "Retrieved ${batch.size} envelopes!")
